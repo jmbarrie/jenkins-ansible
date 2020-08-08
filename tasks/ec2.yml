@@ -1,0 +1,120 @@
+---
+- name: create default cloudformation stack
+  cloudformation:
+    aws_access_key: "{{ aws_access_key_id }}"
+    aws_secret_key: "{{ aws_secret_access_key }}"
+    region: "{{ aws_region }}"
+    stack_name: "{{ aws_cloudformation_stack_name }}"
+    state: present
+    template: templates/default_ansible_jenkins.template
+    create_changeset: yes
+  when: aws_default_cloudformation_stack
+
+- name: assume the ansible ec2 role
+  sts_assume_role:
+    aws_access_key: "{{ aws_access_key_id }}"
+    aws_secret_key: "{{ aws_secret_access_key }}"
+    region: "{{ aws_region }}"
+    role_arn: "{{ aws_ec2_role_arn }}"
+    role_session_name: "ec2Testing"
+  register: assumed_role
+
+- name: gather vpc subnet info
+  ec2_vpc_subnet_info:
+    aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
+    aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
+    security_token: "{{ assumed_role.sts_creds.session_token }}"
+    region: "{{ aws_region }}"
+    filters:
+      "tag:Name": "ansible-subnet"
+  register: subnet_info
+
+- name: set vpc id and public subnet id facts
+  set_fact: 
+    public_subnet_id: "{{ subnet_info.subnets | map(attribute='id') | list }}"
+    public_vpc_id: "{{ subnet_info.subnets | map(attribute='vpc_id') | list }}"
+
+- ipify_facts:
+  register: public_ip
+
+- name: create jenkins security group
+  ec2_group:
+    aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
+    aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
+    security_token: "{{ assumed_role.sts_creds.session_token }}"
+    name: "{{ aws_ec2_security_group }}"
+    description: Default Jenkins Security Group
+    state: present
+    vpc_id: "{{ public_vpc_id[0] }}"
+    region: "{{ aws_region }}"
+    rules:
+    - proto: tcp
+      ports:
+      - 22
+      cidr_ip: "{{ public_ip.ansible_facts.ipify_public_ip | string }}/32"
+      rule_desc: allow ssh
+    tags:
+      "ansible": "security-group"
+
+- name: create key pair
+  ec2_key:
+    aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
+    aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
+    security_token: "{{ assumed_role.sts_creds.session_token }}"
+    region: "{{ aws_region }}"
+    name: "{{ aws_ec2_key_name }}"
+    state: present
+  register: ec2_key
+
+- name: copy ec2 key private key to keys directory
+  copy: 
+    content: "{{ ec2_key.key.private_key }}"
+    dest: "{{ playbook_dir }}/keys/{{ aws_ec2_key_name}}.pem"
+  when: ec2_key.changed
+
+- name: gather ec2 info
+  ec2_instance_info:
+    aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
+    aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
+    security_token: "{{ assumed_role.sts_creds.session_token }}"
+    region: "{{ aws_region }}"
+    filters:
+      "tag:Name": "{{ aws_ec2_instance_tag_name }}"
+  register: ec2_info
+
+- name: create ec2 instance if one doesn't exist
+  ec2:
+    aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
+    aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
+    security_token: "{{ assumed_role.sts_creds.session_token }}"
+    region: "{{ aws_region }}"
+    key_name: "{{ aws_ec2_key_name }}"
+    image: "{{ aws_ec2_ami }}"
+    instance_type: "{{ aws_ec2_instance_type }}"
+    vpc_subnet_id: "{{ public_subnet_id[0] }}"
+    state: present
+    assign_public_ip: yes
+    group: "{{ aws_ec2_security_group }}"
+    count: 1
+    wait: yes
+    instance_tags:
+      "Name": "{{ aws_ec2_instance_tag_name }}"
+      "ansible": "{{ aws_ec2_instance_tag_name }}"
+  when: ec2_info.instances | length == 0
+
+- name: start ec2 instance if one exists
+  ec2:
+    aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
+    aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
+    security_token: "{{ assumed_role.sts_creds.session_token }}"
+    region: "{{ aws_region }}"
+    key_name: "{{ aws_ec2_key_name }}"
+    image: "{{ aws_ec2_ami }}"
+    instance_type: "{{ aws_ec2_instance_type }}"
+    vpc_subnet_id: "{{ public_subnet_id[0] }}"
+    state: running
+    instance_id: "{{ ec2_info.instances[0].instance_id }}"
+    group: "{{ aws_ec2_security_group }}"
+    count: 1
+    wait: yes
+  when: ec2_info.instances | length > 0

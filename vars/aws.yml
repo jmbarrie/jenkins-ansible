@@ -1,0 +1,15 @@
+---
+aws_account_id: "{{ vault_aws_account_id }}"
+aws_access_key_id: "{{ vault_aws_access_key_id }}"
+aws_secret_access_key: "{{ vault_aws_secret_access_key }}"
+aws_ec2_key_name: "{{ vault_aws_ec2_key_name }}"
+
+aws_region: us-east-1
+aws_ec2_security_group: JenkinsSG
+aws_ec2_ami: ami-02354e95b39ca8dec
+aws_ec2_instance_type: t2.micro
+aws_ec2_instance_tag_name: jenkins-captain
+aws_ec2_role_arn: arn:aws:iam::{{ aws_account_id }}:role/ansible-ec2-role
+
+aws_default_cloudformation_stack: true
+aws_cloudformation_stack_name: ansible-jenkins-default

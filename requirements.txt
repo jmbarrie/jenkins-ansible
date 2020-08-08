@@ -1,0 +1,6 @@
+ansible
+ansible-lint
+yamllint
+boto
+boto3
+botocore

@@ -1,0 +1,11 @@
+---
+- name: "Playbook"
+  hosts: localhost
+  connection: local
+  
+  vars_files:
+    - vars/aws.yml
+    - vars/vault.yml
+  
+  tasks:
+    - import_tasks: tasks/ec2.yml

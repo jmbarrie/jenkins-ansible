@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: This template will create the required initial resources for this
+  project. This template is used to quickstart LinuxAcademy's AWS Playground. 
+  It will create an IAM Role for Ansible to create EC2 instances And a
+  default VPC. This is by no means a "secure" solution and I highly recommend 
+  going through and setting things up in a different way.
+
+Parameters:
+
+  awsEc2ManagedPolicyArn:
+    Type: String
+    Default: arn:aws:iam::aws:policy/AmazonEC2FullAccess
+  
+  publicVpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+
+  publicSubnetCidr:
+    Type: String
+    Default: 10.0.0.0/24
+  
+  publicSubnetAz:
+    Type: String
+    Default: us-east-1a
+
+Resources:
+
+  ansibleRoleEc2:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "ansible-ec2-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              AWS: 
+                - !Sub "${AWS::AccountId}"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - !Ref awsEc2ManagedPolicyArn
+      Tags:
+        - Key: ansible
+          Value: ec2-role
+  
+  ansiblePublicVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      
+      CidrBlock: !Ref publicVpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: ansible
+          Value: public-vpc
+        - Key: Name
+          Value: ansible-vpc
+  
+  ansibleInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DependsOn: ansiblePublicVpc
+    Properties:
+      Tags:
+        - Key: ansible
+          Value: public-vpc-internet-gateway
+        - Key: Name
+          Value: ansible-internet-gateway
+
+  ansibleAttachInternetGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref ansiblePublicVpc
+      InternetGatewayId: !Ref ansibleInternetGateway
+
+  ansiblePublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: !Ref publicSubnetCidr
+      VpcId: !Ref ansiblePublicVpc
+      AvailabilityZone: !Ref publicSubnetAz
+      Tags:
+        - Key: ansible
+          Value: public-subnet
+        - Key: Name
+          Value: ansible-subnet
+  
+  ansiblePublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    DependsOn: ansiblePublicVpc
+    Properties:
+      VpcId: !Ref ansiblePublicVpc
+      Tags:
+        - Key: ansible
+          Value: public-route-table
+        - Key: Name
+          Value: ansible-route-table
+  
+  ansiblePublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: 
+      - ansiblePublicRouteTable
+      - ansibleAttachInternetGateway
+    Properties:
+      RouteTableId: !Ref ansiblePublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref ansibleInternetGateway
+  
+  ansiblePublicSubnetAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref ansiblePublicRouteTable
+      SubnetId: !Ref ansiblePublicSubnet
