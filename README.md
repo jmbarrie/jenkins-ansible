@@ -2,7 +2,7 @@
 
 This is a simple project following Infrastructure as Code on AWS. A default
 CloudFormation template is provided which will outfit an AWS environment with
-what is needed to SSH into a EC2 instance. The overall goal of this project is
+what is needed to SSH into an EC2 instance. The overall goal of this project is
 to eventually expand toward best practices in security and taking advantage of 
 the ease of use with Ansible.
 
@@ -38,6 +38,8 @@ $ ansible-vault encrypt vars/vault.yml
 Follow the prompts provided to secure your credentials.
 
 ### Example
+
+#### Jenkins Server Creation
 
 This tool is built under the impression that a user has a clean slate account to
 work with. The `default_ansible_jenkins.template` file will create many of the
@@ -105,3 +107,15 @@ the command:
 ```
 $ sudo cat /var/lib/jenkins/secrets/initialAdminPassword
 ```
+
+#### Clean up
+
+When you're all done, tearing down the lab can be done by including `destroy` as
+an extra variable:
+
+```
+$ ansible-playbook provision -e "destroy=true"
+```
+
+NOTE: During the stack deletion process there has been some instances of a hang 
+when deleting the `ansiblePublicVpc` and that may need to be deleted manually.
