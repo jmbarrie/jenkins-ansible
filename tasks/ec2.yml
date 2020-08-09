@@ -72,17 +72,7 @@
     dest: "{{ playbook_dir }}/keys/{{ aws_ec2_key_name}}.pem"
   when: ec2_key.changed
 
-- name: gather ec2 info
-  ec2_instance_info:
-    aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
-    aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
-    security_token: "{{ assumed_role.sts_creds.session_token }}"
-    region: "{{ aws_region }}"
-    filters:
-      "tag:Name": "{{ aws_ec2_instance_tag_name }}"
-  register: ec2_info
-
-- name: create ec2 instance if one doesn't exist
+- name: create ec2 instance
   ec2:
     aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
     aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
@@ -100,21 +90,22 @@
     instance_tags:
       "Name": "{{ aws_ec2_instance_tag_name }}"
       "ansible": "{{ aws_ec2_instance_tag_name }}"
-  when: ec2_info.instances | length == 0
+  register: ec2_created_instance
 
-- name: start ec2 instance if one exists
-  ec2:
-    aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
-    aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
-    security_token: "{{ assumed_role.sts_creds.session_token }}"
-    region: "{{ aws_region }}"
-    key_name: "{{ aws_ec2_key_name }}"
-    image: "{{ aws_ec2_ami }}"
-    instance_type: "{{ aws_ec2_instance_type }}"
-    vpc_subnet_id: "{{ public_subnet_id[0] }}"
-    state: running
-    instance_id: "{{ ec2_info.instances[0].instance_id }}"
-    group: "{{ aws_ec2_security_group }}"
-    count: 1
-    wait: yes
-  when: ec2_info.instances | length > 0
+- name: pausing for "{{ aws_ec2_pause_time }}"
+  pause:
+    minutes: "{{ aws_ec2_pause_time }}"
+
+- name: wait for ssh
+  delegate_to: "{{ ec2_created_instance.instances[0].public_dns_name }}"
+  wait_for_connection:
+    delay: 60
+    timeout: 320
+  when: ec2_created_instance.instances is defined
+
+- name: add created instance to host group
+  delegate_to: localhost
+  add_host:
+    hostname: "{{ ec2_created_instance.instances[0].public_ip }}"
+    groupname: launched
+  when: ec2_created_instance.instances is defined

@@ -55,10 +55,11 @@ aws_ec2_key_name: "{{ vault_aws_ec2_key_name }}"
 
 aws_region: us-east-1
 aws_ec2_security_group: JenkinsSG
-aws_ec2_ami: ami-02354e95b39ca8dec
+aws_ec2_ami: ami-098f16afa9edf40be
 aws_ec2_instance_type: t2.micro
 aws_ec2_instance_tag_name: jenkins-captain
 aws_ec2_role_arn: arn:aws:iam::{{ aws_account_id }}:role/ansible-ec2-role
+aws_ec2_pause_time: 2
 
 aws_default_cloudformation_stack: true
 aws_cloudformation_stack_name: ansible-jenkins-default
@@ -66,6 +67,19 @@ aws_cloudformation_stack_name: ansible-jenkins-default
 
 The credential section at the top should remain unchanged, but the variables
 below may depend on your usage of the provided CloudFormation template.
+
+A default `ansible.cfg` file is provided and has the following contents:
+
+```
+[defaults]
+interpreter_python = auto_silent
+host_key_checking = false
+private_key_file = {{ full key path }}/keys/jenkins_aws_key.pem
+```
+
+Because this project utilizes a LinuxAcademy sandbox, it is not efficient to
+store keys in a more traditional way. Instead, users should update the 
+`private_key_file` variable with the path to their intended private key.
 
 When ready to deploy, we will run the `provision.yml` playbook:
 
@@ -75,5 +89,19 @@ $ ansible-playbook provision --ask-vault-pass
 
 When prompted, enter the password that was used during the encryption step.
 
-Once the playbook has completed, you will find a barebones EC2 instance named
-"jenkins-captain".
+NOTE: There has been some issues with Ansible accessing the EC2 instance, but
+a `pause` has been added with the default value set to 2 minutes.
+
+Once the playbook has completed, you will find an EC2 instance named
+"jenkins-captain" configured with Jenkins.
+
+At this time configuration has not been automated, but it will eventually be
+included. Instead, please navigate to `http://{{ your_ec2_ip }}:8080` to access
+your new Jenkins server.
+
+To get the initial administrator password, SSH into your EC2 instance and run
+the command:
+
+```
+$ sudo cat /var/lib/jenkins/secrets/initialAdminPassword
+```
