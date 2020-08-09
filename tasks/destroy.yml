@@ -1,0 +1,38 @@
+---
+- name: assume the ansible ec2 role
+  sts_assume_role:
+    aws_access_key: "{{ aws_access_key_id }}"
+    aws_secret_key: "{{ aws_secret_access_key }}"
+    region: "{{ aws_region }}"
+    role_arn: "{{ aws_ec2_role_arn }}"
+    role_session_name: "ec2Testing"
+  register: assumed_role
+
+- name: gather ansible created ec2 instance information
+  ec2_instance_info:
+    aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
+    aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
+    security_token: "{{ assumed_role.sts_creds.session_token }}"
+    region: "{{ aws_region }}"
+    filters:
+      "tag:ansible": "{{ aws_ec2_instance_tag_name }}"
+  register: ec2_info
+
+- name: terminate ec2 instances
+  ec2:
+    aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
+    aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
+    security_token: "{{ assumed_role.sts_creds.session_token }}"
+    region: "{{ aws_region }}"
+    state: absent
+    instance_id: "{{ ec2_info.instances[0].instance_id }}"
+  when: ec2_info.instances | length > 0
+
+- name: gather cloudformation stack information
+  cloudformation:
+    aws_access_key: "{{ aws_access_key_id }}"
+    aws_secret_key: "{{ aws_secret_access_key }}"
+    region: "{{ aws_region }}"
+    stack_name: "{{ aws_cloudformation_stack_name }}"
+    state: absent
+  when: aws_default_cloudformation_stack
