@@ -1,0 +1,32 @@
+--- 
+- name: update all packages
+  package:
+    name: '*'
+    state: latest
+
+- name: install java
+  package:
+    name: 'java-1.8.0-openjdk'
+    state: latest
+
+- name: install jenkins repository
+  yum_repository:
+    name: jenkins
+    state: present
+    description: Official Jenkins repo
+    baseurl: https://pkg.jenkins.io/redhat/
+    gpgkey: https://jenkins-ci.org/redhat/jenkins-ci.org.key
+    gpgcheck: yes
+    enabled: yes
+
+- name: install jenkins
+  yum:
+    name: jenkins
+    update_cache: yes
+    state: present
+
+- name: enable jenkins
+  service:
+    name: jenkins
+    state: started
+    enabled: yes
